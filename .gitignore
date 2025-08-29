@@ -7,6 +7,6 @@ wheels/
 *.egg-info
 
 # Virtual environments
-.venv
+.venv/
 
-baseball_elo/baseball_elo_data/
+# baseball_elo/data/
