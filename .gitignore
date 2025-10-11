@@ -10,3 +10,4 @@ wheels/
 .venv/
 
 # baseball_elo/data/
+following_the_book/data/the_book_data.csv
