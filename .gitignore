@@ -11,3 +11,5 @@ wheels/
 
 # baseball_elo/data/
 following_the_book/data/the_book_data.csv
+**/data/** # Ignore all files in any data directory
+unfinished
