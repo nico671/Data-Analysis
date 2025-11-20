@@ -1,3 +1,11 @@
-# Baseball Data Analysis
+# Data Analysis Projects
 
-This repository is dedicated to analyzing baseball data. This is more of an experimentation repository where I try out different models and techniques to see what insights can be gleaned from baseball statistics. Currently the only finished analysis is an Elo rating system for predicting game outcomes. More analyses may be added in the future.
+This repository contains various data analysis projects, primarily focused on baseball statistics and metrics.
+
+## Currently Public Projects
+
+1. [MLB Elo System](MLB_elo.ipynb): An implementation of the Elo rating system for MLB teams.
+
+## Currently Working On
+
+- **Swing Plus Analysis**: Creating advanced metrics for evaluating baseball swings using pitch by pitch Statcast data.

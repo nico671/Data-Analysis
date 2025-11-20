@@ -9,7 +9,13 @@ wheels/
 # Virtual environments
 .venv/
 
-# baseball_elo/data/
-following_the_book/data/the_book_data.csv
-**/data/** # Ignore all files in any data directory
-unfinished
+.env
+
+data/baserunning/*
+data/clash_royale/*
+data/swing_plus/*
+data/thebook/*
+basestealing_exploration.ipynb
+swing_plus.ipynb
+thebook.ipynb
+clash_royale/*

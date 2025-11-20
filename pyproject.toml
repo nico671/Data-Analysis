@@ -5,8 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aiohttp>=3.13.0",
     "asyncio>=4.0.0",
     "bs4>=0.0.2",
+    "dotenv>=0.9.9",
+    "ijson>=3.4.0.post0",
     "matplotlib>=3.10.5",
     "nest-asyncio>=1.6.0",
     "numpy>=2.3.2",
@@ -15,9 +18,12 @@ dependencies = [
     "polars>=1.32.3",
     "pyarrow>=21.0.0",
     "pybaseballstats>=0.3.11",
+    "pymc>=5.26.1",
     "requests>=2.32.5",
     "scikit-learn>=1.7.1",
     "seaborn>=0.13.2",
+    "statsmodels>=0.14.5",
+    "tqdm>=4.67.1",
 ]
 
 [dependency-groups]
