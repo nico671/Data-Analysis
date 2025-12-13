@@ -13,9 +13,12 @@ wheels/
 
 data/baserunning/*
 data/clash_royale/*
-data/swing_plus/*
+data/swing_metrics/*
 data/thebook/*
 basestealing_exploration.ipynb
-swing_plus.ipynb
+swing_metrics.ipynb
 thebook.ipynb
 clash_royale/*
+swing_metrics_plan.md
+best_traders.ipynb
+data/best_traders/*
