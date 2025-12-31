@@ -9,7 +9,6 @@ dependencies = [
     "asyncio>=4.0.0",
     "bs4>=0.0.2",
     "dotenv>=0.9.9",
-    "ijson>=3.4.0.post0",
     "matplotlib>=3.10.5",
     "nest-asyncio>=1.6.0",
     "numpy>=2.3.2",

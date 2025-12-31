@@ -9,3 +9,6 @@ This repository contains various data analysis projects, primarily focused on ba
 ## Currently Working On
 
 - **Swing Plus Analysis**: Creating advanced metrics for evaluating baseball swings using pitch by pitch Statcast data.
+- **Clash Royale Battle Analysis**:
+  - Analyzing the effects of card levels on battle outcomes.
+  - Evaluating the relative skill needed to win with different cards.
