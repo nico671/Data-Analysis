@@ -5,4 +5,4 @@ format: html
 
 Welcome to my portfolio! Here are my current projects:
 
-* [MLB Elo Prediction Engine](MLB_Elo/)
+* [MLB Elo Prediction Engine](MLB_Elo/MLB_Elo.html)
