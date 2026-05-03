@@ -1,0 +1,8 @@
+---
+title: "My Data Analysis Portfolio"
+format: html
+---
+
+Welcome to my portfolio! Here are my current projects:
+
+* [MLB Elo Prediction Engine](MLB_Elo/)

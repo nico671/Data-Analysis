@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.37">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Nicolas Carbone">
+<meta name="dcterms.date" content="2026-04-19">
+
+<title>From Retrosheet to Ratings: Building an MLB Prediction Engine with Polars</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="MLB_Elo_files/libs/clipboard/clipboard.min.js"></script>
+<script src="MLB_Elo_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="MLB_Elo_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="MLB_Elo_files/libs/quarto-html/popper.min.js"></script>
+<script src="MLB_Elo_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="MLB_Elo_files/libs/quarto-html/anchor.min.js"></script>
+<link href="MLB_Elo_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="MLB_Elo_files/libs/quarto-html/quarto-syntax-highlighting-7f8f88aac4f3542376d5c11b86a4c14d.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="MLB_Elo_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="MLB_Elo_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="MLB_Elo_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
+
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">From Retrosheet to Ratings: Building an MLB Prediction Engine with Polars</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Nicolas Carbone </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">April 19, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="introduction" class="level2">
+<h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
+<p>In my opinion, baseball is the most stubbornly unpredictable of all major American sports. On any given Tuesday in July, the worst team in the league can effortlessly dismantle a powerhouse roster bound for the World Series. It is a game defined by failure, variance, and a grueling 162-game schedule where even the most dominant teams still lose 60 times a year, which is what makes the sport so appealing to me. This stands in stark contrast to the highly analytical nature of the sport, where every pitch, swing, and defensive play is meticulously recorded and analyzed.</p>
+<p>Because of this daily chaos, predicting individual games is notoriously difficult. Yet, when we zoom out and look at baseball over a long enough timeline, the statistical noise fades away, and true team strength reveals itself. Modeling that underlying strength provides incredible insights into the ebbs and flows of the sport’s history—who the real dynasties were, which teams over-performed their talent, and how power shifts within the league over time.</p>
+<p>To cut through the variance, we can borrow a concept originally designed to rank chess grandmasters: the Elo rating system.</p>
+<p>In this project, we are going to build a custom Elo rating engine from scratch for all 30 Major League Baseball franchises. To keep the league structure consistent, our model will cover the modern expansion era, starting in 1998, when the MLB expanded to 30 teams with the addition of the Arizona Diamondbacks and Tampa Bay Devil Rays, and running to the end of the 2024 season.</p>
+<p>Building an accurate historical model requires a massive amount of high-quality data. For this, we will rely on Retrosheet, a comprehensive, open-source repository of baseball history. Using their comprehensive game logs, our Python-based Elo model will digest, analyze, and learn from over 200,000 individual baseball games, adjusting team ratings game by game, year over year, to reflect the true ebb and flow of team performance across the decades.</p>
+<p>Let’s dive into how it works.</p>
+</section>
+<section id="theory-of-elo" class="level2">
+<h2 class="anchored" data-anchor-id="theory-of-elo">Theory of Elo</h2>
+<p>To build a baseball prediction engine, we first need to understand the math that powers it. The Elo rating system was originally invented in the 1960s by Arpad Elo, a physics professor and chess master. Elo wanted a better way to rank players than the arbitrary systems of his day. Elo’s central assumption was brilliant in its simplicity: a player’s performance in any single game is a normally distributed random variable.</p>
+<p>Any player or team can have a great day or a terrible day, but their true skill is the mean of that distribution. Because we cannot mathematically measure skill simply by looking at the what the game’s participants do, performance can only be inferred from outcomes: wins and losses. If you beat someone, you played better than them on that specific day.</p>
+<p>Because Elo is a zero-sum system, every match is essentially a wager. The winner takes rating points from the loser. How many points change hands depends entirely on the disparity in their ratings prior to the match.</p>
+<p>To make this work, the algorithm requires two mathematical steps for every single game: calculating the expectation, and updating the reality.</p>
+<section id="step-1-the-expected-win-probability" class="level3">
+<h3 class="anchored" data-anchor-id="step-1-the-expected-win-probability">Step 1: The Expected Win Probability</h3>
+<p>Before the first pitch is even thrown, the model looks at the current ratings of both teams and calculates exactly how likely each team is to win. For Team A playing against Team B, the expected win probability for Team A (<span class="math inline">\(E_A\)</span>) is calculated using a logistic curve: <span class="math display">\[E_A=\frac{1}{1+10^{\frac{(R_B-R_A)}{400}}}\]</span></p>
+<p>In this equation:</p>
+<ul>
+<li><span class="math inline">\(R_A\)</span> is the current rating of Team A.</li>
+<li><span class="math inline">\(R_B\)</span> is the current rating of Team B.</li>
+<li>The denominator of 400 is the standard scale factor. It dictates that if a team has a 400-point advantage over their opponent, they are exactly ten times more likely to win than to lose (roughly a 91% win probability).</li>
+</ul>
+<p>Since we are modeling a zero-sum game, the expected win probability for Team B (<span class="math inline">\(E_B\)</span>) is simply: <span class="math display">\[E_B=1-E_A\]</span></p>
+<section id="why-use-a-logistic-curve-instead-of-a-standard-normal-distribution-a-bell-curve" class="level4">
+<h4 class="anchored" data-anchor-id="why-use-a-logistic-curve-instead-of-a-standard-normal-distribution-a-bell-curve">Why use a logistic curve instead of a standard normal distribution (a bell curve)?</h4>
+<p>While Arpad Elo originally used normal probabilities, the United States Chess Federation (USCF) eventually found that the logistic distribution simply fit real-world results better. Specifically, weaker competitors pull off upsets slightly more often than a strict normal distribution predicts. The logistic curve has “fatter tails,” accounting for this real-world variance.The scaling factor of <span class="math inline">\(400\)</span> is an arbitrary but standard choice: it mathematically ensures that a team with a 400-point rating advantage is exactly 10 times more likely to win than their opponent.</p>
+</section>
+</section>
+<section id="step-2-the-update-rule-and-the-k-factor" class="level3">
+<h3 class="anchored" data-anchor-id="step-2-the-update-rule-and-the-k-factor">Step 2: The Update Rule and the K-Factor</h3>
+<p>Once the game ends, reality steps in. We compare the actual outcome (<span class="math inline">\(S_A\)</span>, where a win is 1 and a loss is 0) to the expected outcome (<span class="math inline">\(E_A\)</span>). The rating is then updated using this formula: <span class="math display">\[R_A' = R_A + K \cdot (S_A - E_A)\]</span></p>
+<p>The <span class="math inline">\(K\)</span>-factor is the most important hyperparameter in the entire system. It represents the maximum possible point swing in a single game.</p>
+<ul>
+<li>A <strong>low</strong> <span class="math inline">\(K\)</span> makes the system sluggish and stable; ratings change very slowly, meaning the model requires a massive sample size to recognize when a team has genuinely improved.</li>
+<li>A <strong>high</strong> <span class="math inline">\(K\)</span> makes the system highly reactive to recent events, treating short win-streaks as massive shifts in underlying talent.</li>
+</ul>
+<p>In chess, federations actually stagger the <span class="math inline">\(K\)</span>-factor, assigning high volatility to rookies and low volatility to Grandmasters. For our baseball model, finding the optimal <span class="math inline">\(K\)</span> will be crucial for capturing the momentum of a 162-game season without overreacting to a single bad week in August.</p>
+</section>
+<section id="step-3-modifying-elo-for-baseball" class="level3">
+<h3 class="anchored" data-anchor-id="step-3-modifying-elo-for-baseball">Step 3: Modifying Elo for Baseball</h3>
+<p>Standard Elo is perfect for chess—a sterile, 1-on-1 environment where a win is just a win. But baseball is messy. To make our model accurately reflect MLB reality, we have to inject three critical modifications into the classic Elo theory:</p>
+<ul>
+<li><strong>Home Field Advantage (HFA)</strong>: Playing at home matters. Before calculating the expected win probability, our model artificially adds a set number of Elo points (e.g., +24) to the home team’s rating. This shifts the mathematical expectation slightly in their favor.</li>
+<li><strong>Margin of Victory (MOV) Multiplier:</strong> In chess, there are no blowouts. In baseball, a 12-1 absolute dismantling implies a larger skill gap than a 3-2 squeaker in extra innings. We need to multiply our <span class="math inline">\(K\)</span>-factor update by a Margin of Victory scalar. However, we have to use a logarithmic function for this. We want to reward blowouts, but with diminishing returns so that a fluke 20-0 game doesn’t artificially break a team’s rating for the rest of the season.</li>
+<li><strong>Offseason Mean Reversion:</strong> Chess Grandmasters age slowly. MLB rosters turn over drastically every winter due to free agency, trades, and call-ups. A team that ended 2023 with a sky-high rating won’t necessarily be the exact same team in April 2024. To account for this, we apply a regression to the mean between seasons, pulling every franchise’s rating back toward the league average of 1500 before Opening Day.</li>
+</ul>
+<p>With an understanding of the core theory, we are ready to translate the math into code and build our MLB Elo engine.</p>
+</section>
+</section>
+<section id="data-preparation" class="level2">
+<h2 class="anchored" data-anchor-id="data-preparation">Data Preparation</h2>
+<p>For this project, we will be processing over 200,000 games, calculating pre-game expectations and updating ratings after every single one. While Pandas is the traditional go-to for Python data analysis, I opted to use Polars for this project. Polars is built in Rust and is incredibly fast, memory-efficient, and features a highly expressive syntax for data manipulation.</p>
+<p>Our dataset from Retrosheet is wonderfully comprehensive, but it requires some critical cleaning before we can feed it into an Elo simulation.</p>
+<p>The first thing we will do is restrict our data to regular season games between 1998 and 2024. Playoff baseball is a different beast entirely. Pitcher usage changes, rest days are scheduled differently, and managers make decisions they would never make in June. To keep our model trained strictly on the “true talent” baseline of a 162-game season, we filter out the postseason.</p>
+<p>Second, we must maintain exactly 30 franchises. Between 1998 and 2024, two franchises changed their names and locations. The Montreal Expos (MON) became the Washington Nationals (WAS), and the Florida Marlins (FLO) became the Miami Marlins (MIA). If we don’t map these legacy abbreviations to their modern equivalents, our model will treat them as brand new expansion teams starting at 1500 Elo, completely breaking the historical continuity.</p>
+<p>In addition to these changes we will also apply preprocessing steps to ensure that our data is clean and ready for the Elo simulation. This includes handling missing values, standardizing team names, and creating new columns for home/away status and margin of victory (details omitted for brevity).</p>
+<div id="65deff5d" class="cell" data-execution_count="2">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter for regular season games only</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> df.<span class="bu">filter</span>(pl.col(<span class="st">"gametype"</span>) <span class="op">==</span> <span class="st">"regular"</span>).<span class="bu">filter</span>(pl.col(<span class="st">"season"</span>) <span class="op">&gt;=</span> <span class="dv">1998</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>franchise_mapping <span class="op">=</span> {<span class="st">"MON"</span>: <span class="st">"WAS"</span>, <span class="st">"FLO"</span>: <span class="st">"MIA"</span>}</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> df.with_columns(</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    pl.col(<span class="st">"hometeam"</span>).replace(franchise_mapping).alias(<span class="st">"hometeam"</span>),</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    pl.col(<span class="st">"visteam"</span>).replace(franchise_mapping).alias(<span class="st">"visteam"</span>),</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> df.sort([<span class="st">"date"</span>, <span class="st">"number"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="0d6ea681" class="cell" data-execution_count="3">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> df.with_columns(</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    pl.col(<span class="st">"date"</span>).cast(pl.String).<span class="bu">str</span>.strptime(pl.Date, <span class="bu">format</span><span class="op">=</span><span class="st">"%Y%m</span><span class="sc">%d</span><span class="st">"</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> df.select(</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    pl.col([<span class="st">"visteam"</span>, <span class="st">"hometeam"</span>, <span class="st">"date"</span>, <span class="st">"vruns"</span>, <span class="st">"hruns"</span>, <span class="st">"season"</span>, <span class="st">"number"</span>])</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>team_codes <span class="op">=</span> <span class="bu">list</span>(</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">set</span>(df.select(pl.col(<span class="st">"hometeam"</span>).unique()).to_series().to_list()).intersection(</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>        <span class="bu">set</span>(df.select(pl.col(<span class="st">"visteam"</span>).unique()).to_series().to_list())</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>teams_df <span class="op">=</span> pl.read_csv(<span class="st">"data/teams.csv"</span>)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>teams_df <span class="op">=</span> teams_df.<span class="bu">filter</span>(pl.col(<span class="st">"TEAM"</span>).is_in(team_codes))</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>names <span class="op">=</span> {}</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> row <span class="kw">in</span> teams_df.select(pl.col([<span class="st">"TEAM"</span>, <span class="st">"NICKNAME"</span>])).iter_rows():</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    names[row[<span class="dv">0</span>]] <span class="op">=</span> row[<span class="dv">1</span>]</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> df.with_columns(</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    pl.col(<span class="st">"visteam"</span>).replace(names), pl.col(<span class="st">"hometeam"</span>).replace(names)</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>With our data cleaned and sorted perfectly by date and game number, we are ready to build the simulation engine.</p>
+</section>
+<section id="implementing-the-simulation-engine" class="level2">
+<h2 class="anchored" data-anchor-id="implementing-the-simulation-engine">Implementing the Simulation Engine</h2>
+<p>An Elo system is inherently sequential. You cannot calculate the rating for a game on Friday until Thursday’s games have been finalized. Because of this, we can’t use standard vectorized operations (where you calculate an entire column at once). We have to loop through the schedule chronologically, updating our knowledge state as we go.</p>
+<section id="mathematical-helper-functions" class="level3">
+<h3 class="anchored" data-anchor-id="mathematical-helper-functions">Mathematical Helper Functions</h3>
+<p>First, let’s translate the math from our theory section into Python functions.</p>
+<p>We need a function to calculate the expected win probability (the logistic curve), incorporating our Home Field Advantage (HFA) adjustment.</p>
+<div id="e8db69c8" class="cell" data-execution_count="4">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_expected_win_prob(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    rating_a, rating_b, is_team_a_home_team<span class="op">=</span><span class="va">False</span>, hfa_adjustment<span class="op">=</span><span class="dv">24</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>):</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Calculates the expected win probability for Team A."""</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Apply home field advantage if Team A is at home</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> is_team_a_home_team:</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>        rating_a <span class="op">+=</span> hfa_adjustment</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> <span class="dv">10</span> <span class="op">**</span> ((rating_b <span class="op">-</span> rating_a) <span class="op">/</span> <span class="dv">400</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Next, we need the update rule. This function takes the actual outcome, compares it to the expectation, and multiplies it by our <span class="math inline">\(K\)</span>-factor and our logarithmic Margin of Victory multiplier.</p>
+<div id="e690d588" class="cell" data-execution_count="5">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> math</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> calculate_elo_change(expected_win_prob, actual_outcome, run_diff, k_factor<span class="op">=</span><span class="dv">4</span>):</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Calculates the Elo points to add or subtract after a game."""</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Logarithmic Margin of Victory multiplier (prevents blowouts from breaking the model)</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># The +1 ensures a 1-run game doesn't zero out the multiplier</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    mov_multiplier <span class="op">=</span> math.log(<span class="bu">abs</span>(run_diff) <span class="op">+</span> <span class="dv">1</span>)</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="co"># The standard Elo update formula scaled by MOV</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    point_change <span class="op">=</span> k_factor <span class="op">*</span> mov_multiplier <span class="op">*</span> (actual_outcome <span class="op">-</span> expected_win_prob)</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> point_change</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<blockquote class="blockquote">
+<p><strong><em>NOTE:</em></strong> For this simulation, I tuned the base <span class="math inline">\(K\)</span>-factor to 4. Because we are multiplying <span class="math inline">\(K\)</span> by the margin of victory, a standard <span class="math inline">\(K\)</span> of 20 or 32 would result in wild, 50-point rating swings after a single 8-0 shutout. A lower base <span class="math inline">\(K\)</span> keeps the model stable while still letting the MOV multiplier do its job.</p>
+</blockquote>
+</section>
+<section id="the-chronological-loop" class="level3">
+<h3 class="anchored" data-anchor-id="the-chronological-loop">The Chronological Loop</h3>
+<p>With our helper functions ready, we can run the simulation. We initialize a dictionary to hold the “live” rating of all 30 teams, starting everyone at the league average of 1500.</p>
+<p>As we iterate row-by-row through the Polars DataFrame, we fetch the current ratings, calculate the expected win probability, log the results, and then update the dictionary for the next day. Between seasons, we apply our 33% mean reversion to account for offseason roster changes.</p>
+<div id="d8c1bddb" class="cell" data-execution_count="6">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Initialize all 30 teams at the league average</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>team_ratings <span class="op">=</span> {</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    team: <span class="dv">1500</span> <span class="cf">for</span> team <span class="kw">in</span> df.select(pl.col(<span class="st">"hometeam"</span>).unique()).to_series().to_list()</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Lists to store the historical states for our final dataset</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>home_elos_pre <span class="op">=</span> []</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>away_elos_pre <span class="op">=</span> []</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>home_win_probs <span class="op">=</span> []</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>elo_changes <span class="op">=</span> []</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>current_season <span class="op">=</span> <span class="dv">1998</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Iterate through history chronologically</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> row <span class="kw">in</span> df.iter_rows(named<span class="op">=</span><span class="va">True</span>):</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>    <span class="co"># --- OFFSEASON MEAN REVERSION ---</span></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> row[<span class="st">"season"</span>] <span class="op">!=</span> current_season:</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> team <span class="kw">in</span> team_ratings:</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Regress every team 33% back toward 1500</span></span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>            team_ratings[team] <span class="op">=</span> (team_ratings[team] <span class="op">*</span> <span class="fl">0.67</span>) <span class="op">+</span> (<span class="dv">1500</span> <span class="op">*</span> <span class="fl">0.33</span>)</span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>        current_season <span class="op">=</span> row[<span class="st">"season"</span>]</span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>    <span class="co"># --- PRE-GAME EXPECTATIONS ---</span></span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>    home_team <span class="op">=</span> row[<span class="st">"hometeam"</span>]</span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>    away_team <span class="op">=</span> row[<span class="st">"visteam"</span>]</span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a>    home_rating <span class="op">=</span> team_ratings[home_team]</span>
+<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a>    away_rating <span class="op">=</span> team_ratings[away_team]</span>
+<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Calculate home win probability (with +24 HFA)</span></span>
+<span id="cb5-31"><a href="#cb5-31" aria-hidden="true" tabindex="-1"></a>    home_prob <span class="op">=</span> get_expected_win_prob(</span>
+<span id="cb5-32"><a href="#cb5-32" aria-hidden="true" tabindex="-1"></a>        home_rating, away_rating, is_team_a_home_team<span class="op">=</span><span class="va">True</span></span>
+<span id="cb5-33"><a href="#cb5-33" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb5-34"><a href="#cb5-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-35"><a href="#cb5-35" aria-hidden="true" tabindex="-1"></a>    <span class="co"># --- POST-GAME UPDATES ---</span></span>
+<span id="cb5-36"><a href="#cb5-36" aria-hidden="true" tabindex="-1"></a>    run_diff <span class="op">=</span> row[<span class="st">"hruns"</span>] <span class="op">-</span> row[<span class="st">"vruns"</span>]</span>
+<span id="cb5-37"><a href="#cb5-37" aria-hidden="true" tabindex="-1"></a>    home_win <span class="op">=</span> <span class="dv">1</span> <span class="cf">if</span> run_diff <span class="op">&gt;</span> <span class="dv">0</span> <span class="cf">else</span> <span class="dv">0</span></span>
+<span id="cb5-38"><a href="#cb5-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-39"><a href="#cb5-39" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Calculate point exchange</span></span>
+<span id="cb5-40"><a href="#cb5-40" aria-hidden="true" tabindex="-1"></a>    rating_change <span class="op">=</span> calculate_elo_change(home_prob, home_win, run_diff)</span>
+<span id="cb5-41"><a href="#cb5-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-42"><a href="#cb5-42" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Update the live dictionaries</span></span>
+<span id="cb5-43"><a href="#cb5-43" aria-hidden="true" tabindex="-1"></a>    team_ratings[home_team] <span class="op">+=</span> rating_change</span>
+<span id="cb5-44"><a href="#cb5-44" aria-hidden="true" tabindex="-1"></a>    team_ratings[away_team] <span class="op">-=</span> rating_change</span>
+<span id="cb5-45"><a href="#cb5-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-46"><a href="#cb5-46" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Store the data for downstream analysis</span></span>
+<span id="cb5-47"><a href="#cb5-47" aria-hidden="true" tabindex="-1"></a>    home_elos_pre.append(home_rating)</span>
+<span id="cb5-48"><a href="#cb5-48" aria-hidden="true" tabindex="-1"></a>    away_elos_pre.append(away_rating)</span>
+<span id="cb5-49"><a href="#cb5-49" aria-hidden="true" tabindex="-1"></a>    home_win_probs.append(home_prob)</span>
+<span id="cb5-50"><a href="#cb5-50" aria-hidden="true" tabindex="-1"></a>    elo_changes.append(rating_change)</span>
+<span id="cb5-51"><a href="#cb5-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-52"><a href="#cb5-52" aria-hidden="true" tabindex="-1"></a><span class="co"># Finally, append the tracked lists back to our Polars dataframe</span></span>
+<span id="cb5-53"><a href="#cb5-53" aria-hidden="true" tabindex="-1"></a>final_model <span class="op">=</span> df.with_columns(</span>
+<span id="cb5-54"><a href="#cb5-54" aria-hidden="true" tabindex="-1"></a>    [</span>
+<span id="cb5-55"><a href="#cb5-55" aria-hidden="true" tabindex="-1"></a>        pl.Series(<span class="st">"home_elo_pre"</span>, home_elos_pre, strict<span class="op">=</span><span class="va">False</span>),</span>
+<span id="cb5-56"><a href="#cb5-56" aria-hidden="true" tabindex="-1"></a>        pl.Series(<span class="st">"away_elo_pre"</span>, away_elos_pre, strict<span class="op">=</span><span class="va">False</span>),</span>
+<span id="cb5-57"><a href="#cb5-57" aria-hidden="true" tabindex="-1"></a>        pl.Series(<span class="st">"home_win_prob"</span>, home_win_probs, strict<span class="op">=</span><span class="va">False</span>),</span>
+<span id="cb5-58"><a href="#cb5-58" aria-hidden="true" tabindex="-1"></a>        pl.Series(<span class="st">"elo_change"</span>, elo_changes, strict<span class="op">=</span><span class="va">False</span>),</span>
+<span id="cb5-59"><a href="#cb5-59" aria-hidden="true" tabindex="-1"></a>    ]</span>
+<span id="cb5-60"><a href="#cb5-60" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb5-61"><a href="#cb5-61" aria-hidden="true" tabindex="-1"></a>display(final_model.head(<span class="dv">5</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div><style>
+.dataframe > thead > tr,
+.dataframe > tbody > tr {
+  text-align: right;
+  white-space: pre-wrap;
+}
+</style>
+<small>shape: (5, 11)</small>
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th">visteam</th>
+<th data-quarto-table-cell-role="th">hometeam</th>
+<th data-quarto-table-cell-role="th">date</th>
+<th data-quarto-table-cell-role="th">vruns</th>
+<th data-quarto-table-cell-role="th">hruns</th>
+<th data-quarto-table-cell-role="th">season</th>
+<th data-quarto-table-cell-role="th">number</th>
+<th data-quarto-table-cell-role="th">home_elo_pre</th>
+<th data-quarto-table-cell-role="th">away_elo_pre</th>
+<th data-quarto-table-cell-role="th">home_win_prob</th>
+<th data-quarto-table-cell-role="th">elo_change</th>
+</tr>
+<tr class="even">
+<td>str</td>
+<td>str</td>
+<td>date</td>
+<td>i64</td>
+<td>i64</td>
+<td>i64</td>
+<td>i64</td>
+<td>f64</td>
+<td>f64</td>
+<td>f64</td>
+<td>f64</td>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>"Rockies"</td>
+<td>"Diamondbacks"</td>
+<td>1998-03-31</td>
+<td>9</td>
+<td>2</td>
+<td>1998</td>
+<td>0</td>
+<td>1500.0</td>
+<td>1500.0</td>
+<td>0.534484</td>
+<td>-4.445712</td>
+</tr>
+<tr class="even">
+<td>"Brewers"</td>
+<td>"Braves"</td>
+<td>1998-03-31</td>
+<td>1</td>
+<td>2</td>
+<td>1998</td>
+<td>0</td>
+<td>1500.0</td>
+<td>1500.0</td>
+<td>0.534484</td>
+<td>1.290685</td>
+</tr>
+<tr class="odd">
+<td>"Royals"</td>
+<td>"Orioles"</td>
+<td>1998-03-31</td>
+<td>4</td>
+<td>1</td>
+<td>1998</td>
+<td>0</td>
+<td>1500.0</td>
+<td>1500.0</td>
+<td>0.534484</td>
+<td>-2.963808</td>
+</tr>
+<tr class="even">
+<td>"Padres"</td>
+<td>"Reds"</td>
+<td>1998-03-31</td>
+<td>10</td>
+<td>2</td>
+<td>1998</td>
+<td>0</td>
+<td>1500.0</td>
+<td>1500.0</td>
+<td>0.534484</td>
+<td>-4.697525</td>
+</tr>
+<tr class="odd">
+<td>"Cubs"</td>
+<td>"Marlins"</td>
+<td>1998-03-31</td>
+<td>6</td>
+<td>11</td>
+<td>1998</td>
+<td>0</td>
+<td>1500.0</td>
+<td>1500.0</td>
+<td>0.534484</td>
+<td>3.336371</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<p>By the time this loop finishes executing over the last game in late 2024, our team_ratings dictionary contains a highly calibrated, mathematically rigorous assessment of exactly how good every MLB franchise is at this exact moment in time.</p>
+<p>Now, the fun part: Let’s look at the results and see if the model actually knows baseball.</p>
+</section>
+</section>
+<section id="model-evaluation-and-results" class="level2">
+<h2 class="anchored" data-anchor-id="model-evaluation-and-results">Model Evaluation and Results</h2>
+<p>Because we are predicting binary outcomes (wins and losses) in a highly variant sport, we need to evaluate our model on multiple fronts: intuitive logic, historical accuracy, and statistical reliability.</p>
+<section id="the-eye-test" class="level3">
+<h3 class="anchored" data-anchor-id="the-eye-test">The “Eye Test”</h3>
+<p>The following table displays the final Elo ratings for all 30 MLB teams at the end of the 2024 season, along with their corresponding win percentages, run differentials and average Elo rating over the entire simulation period. The teams are sorted by their final Elo rating, giving us a clear picture of how the model perceives the relative strength of each franchise based on over 200,000 games of data.</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Team</th>
+<th style="text-align: right;">Final Elo</th>
+<th style="text-align: right;">Avg Elo (25yr)</th>
+<th style="text-align: right;">Win %</th>
+<th style="text-align: right;">Run Diff</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Dodgers</td>
+<td style="text-align: right;">1579.2</td>
+<td style="text-align: right;">1534.6</td>
+<td style="text-align: right;">0.561</td>
+<td style="text-align: right;">2603</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Braves</td>
+<td style="text-align: right;">1558.1</td>
+<td style="text-align: right;">1529.3</td>
+<td style="text-align: right;">0.553</td>
+<td style="text-align: right;">2207</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Padres</td>
+<td style="text-align: right;">1557.8</td>
+<td style="text-align: right;">1485.8</td>
+<td style="text-align: right;">0.482</td>
+<td style="text-align: right;">-864</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Brewers</td>
+<td style="text-align: right;">1556.2</td>
+<td style="text-align: right;">1489.3</td>
+<td style="text-align: right;">0.493</td>
+<td style="text-align: right;">-468</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Astros</td>
+<td style="text-align: right;">1554.3</td>
+<td style="text-align: right;">1512.1</td>
+<td style="text-align: right;">0.522</td>
+<td style="text-align: right;">1292</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Phillies</td>
+<td style="text-align: right;">1545.1</td>
+<td style="text-align: right;">1501.4</td>
+<td style="text-align: right;">0.508</td>
+<td style="text-align: right;">200</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Diamondbacks</td>
+<td style="text-align: right;">1541.2</td>
+<td style="text-align: right;">1492.6</td>
+<td style="text-align: right;">0.489</td>
+<td style="text-align: right;">-285</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Yankees</td>
+<td style="text-align: right;">1541.1</td>
+<td style="text-align: right;">1552.7</td>
+<td style="text-align: right;">0.585</td>
+<td style="text-align: right;">3288</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Mets</td>
+<td style="text-align: right;">1538</td>
+<td style="text-align: right;">1503.1</td>
+<td style="text-align: right;">0.506</td>
+<td style="text-align: right;">310</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Mariners</td>
+<td style="text-align: right;">1537.1</td>
+<td style="text-align: right;">1500.9</td>
+<td style="text-align: right;">0.499</td>
+<td style="text-align: right;">-217</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Orioles</td>
+<td style="text-align: right;">1531.8</td>
+<td style="text-align: right;">1482.5</td>
+<td style="text-align: right;">0.459</td>
+<td style="text-align: right;">-1755</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Cubs</td>
+<td style="text-align: right;">1527.7</td>
+<td style="text-align: right;">1498.5</td>
+<td style="text-align: right;">0.498</td>
+<td style="text-align: right;">209</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Guardians</td>
+<td style="text-align: right;">1520.9</td>
+<td style="text-align: right;">1511.9</td>
+<td style="text-align: right;">0.523</td>
+<td style="text-align: right;">1119</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Tigers</td>
+<td style="text-align: right;">1511.6</td>
+<td style="text-align: right;">1475.7</td>
+<td style="text-align: right;">0.463</td>
+<td style="text-align: right;">-1641</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Devil Rays</td>
+<td style="text-align: right;">1508.7</td>
+<td style="text-align: right;">1497.1</td>
+<td style="text-align: right;">0.49</td>
+<td style="text-align: right;">-477</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Royals</td>
+<td style="text-align: right;">1505.4</td>
+<td style="text-align: right;">1462</td>
+<td style="text-align: right;">0.439</td>
+<td style="text-align: right;">-2567</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Giants</td>
+<td style="text-align: right;">1499.5</td>
+<td style="text-align: right;">1508.9</td>
+<td style="text-align: right;">0.522</td>
+<td style="text-align: right;">661</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Cardinals</td>
+<td style="text-align: right;">1494.2</td>
+<td style="text-align: right;">1525.1</td>
+<td style="text-align: right;">0.547</td>
+<td style="text-align: right;">1813</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Red Sox</td>
+<td style="text-align: right;">1491.3</td>
+<td style="text-align: right;">1536.5</td>
+<td style="text-align: right;">0.546</td>
+<td style="text-align: right;">2286</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Reds</td>
+<td style="text-align: right;">1489.2</td>
+<td style="text-align: right;">1482.9</td>
+<td style="text-align: right;">0.476</td>
+<td style="text-align: right;">-1039</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Twins</td>
+<td style="text-align: right;">1487.5</td>
+<td style="text-align: right;">1495.4</td>
+<td style="text-align: right;">0.496</td>
+<td style="text-align: right;">-284</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Blue Jays</td>
+<td style="text-align: right;">1486.3</td>
+<td style="text-align: right;">1510.4</td>
+<td style="text-align: right;">0.503</td>
+<td style="text-align: right;">499</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Rangers</td>
+<td style="text-align: right;">1481.1</td>
+<td style="text-align: right;">1502.1</td>
+<td style="text-align: right;">0.496</td>
+<td style="text-align: right;">-191</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Pirates</td>
+<td style="text-align: right;">1464.6</td>
+<td style="text-align: right;">1466.2</td>
+<td style="text-align: right;">0.448</td>
+<td style="text-align: right;">-2312</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Nationals</td>
+<td style="text-align: right;">1450</td>
+<td style="text-align: right;">1481.5</td>
+<td style="text-align: right;">0.471</td>
+<td style="text-align: right;">-1129</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Marlins</td>
+<td style="text-align: right;">1438</td>
+<td style="text-align: right;">1472.2</td>
+<td style="text-align: right;">0.457</td>
+<td style="text-align: right;">-1964</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Athletics</td>
+<td style="text-align: right;">1430.2</td>
+<td style="text-align: right;">1511.3</td>
+<td style="text-align: right;">0.513</td>
+<td style="text-align: right;">686</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Angels</td>
+<td style="text-align: right;">1413</td>
+<td style="text-align: right;">1510.6</td>
+<td style="text-align: right;">0.512</td>
+<td style="text-align: right;">272</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Rockies</td>
+<td style="text-align: right;">1402.3</td>
+<td style="text-align: right;">1476.1</td>
+<td style="text-align: right;">0.458</td>
+<td style="text-align: right;">-1486</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">White Sox</td>
+<td style="text-align: right;">1358.6</td>
+<td style="text-align: right;">1491.6</td>
+<td style="text-align: right;">0.483</td>
+<td style="text-align: right;">-766</td>
+</tr>
+</tbody>
+</table>
+<div id="f1d3e62f" class="cell" data-execution_count="7">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> polars <span class="im">as</span> pl</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Convert the final dictionary into a Polars DataFrame</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>elo_df <span class="op">=</span> pl.DataFrame(</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    {<span class="st">"Team"</span>: <span class="bu">list</span>(team_ratings.keys()), <span class="st">"Final Elo"</span>: <span class="bu">list</span>(team_ratings.values())}</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Aggregate Home stats (NOW INCLUDING ELO SUM)</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>home_stats <span class="op">=</span> (</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    final_model.group_by(<span class="st">"hometeam"</span>)</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    .agg(</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>        [</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>            pl.<span class="bu">len</span>().alias(<span class="st">"home_games"</span>),</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>            (pl.col(<span class="st">"hruns"</span>) <span class="op">&gt;</span> pl.col(<span class="st">"vruns"</span>)).<span class="bu">sum</span>().alias(<span class="st">"home_wins"</span>),</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>            (pl.col(<span class="st">"hruns"</span>) <span class="op">-</span> pl.col(<span class="st">"vruns"</span>)).<span class="bu">sum</span>().alias(<span class="st">"home_run_diff"</span>),</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>            pl.col(<span class="st">"home_elo_pre"</span>).<span class="bu">sum</span>().alias(<span class="st">"home_elo_sum"</span>),  <span class="co"># New!</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>        ]</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>    .rename({<span class="st">"hometeam"</span>: <span class="st">"Team"</span>})</span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Aggregate Away stats (NOW INCLUDING ELO SUM)</span></span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>away_stats <span class="op">=</span> (</span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>    final_model.group_by(<span class="st">"visteam"</span>)</span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>    .agg(</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>        [</span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>            pl.<span class="bu">len</span>().alias(<span class="st">"away_games"</span>),</span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>            (pl.col(<span class="st">"vruns"</span>) <span class="op">&gt;</span> pl.col(<span class="st">"hruns"</span>)).<span class="bu">sum</span>().alias(<span class="st">"away_wins"</span>),</span>
+<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a>            (pl.col(<span class="st">"vruns"</span>) <span class="op">-</span> pl.col(<span class="st">"hruns"</span>)).<span class="bu">sum</span>().alias(<span class="st">"away_run_diff"</span>),</span>
+<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a>            pl.col(<span class="st">"away_elo_pre"</span>).<span class="bu">sum</span>().alias(<span class="st">"away_elo_sum"</span>),  <span class="co"># New!</span></span>
+<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a>        ]</span>
+<span id="cb6-33"><a href="#cb6-33" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb6-34"><a href="#cb6-34" aria-hidden="true" tabindex="-1"></a>    .rename({<span class="st">"visteam"</span>: <span class="st">"Team"</span>})</span>
+<span id="cb6-35"><a href="#cb6-35" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-36"><a href="#cb6-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-37"><a href="#cb6-37" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Join them together, calculate totals, and sort</span></span>
+<span id="cb6-38"><a href="#cb6-38" aria-hidden="true" tabindex="-1"></a>final_standings <span class="op">=</span> (</span>
+<span id="cb6-39"><a href="#cb6-39" aria-hidden="true" tabindex="-1"></a>    elo_df.join(home_stats, on<span class="op">=</span><span class="st">"Team"</span>, how<span class="op">=</span><span class="st">"left"</span>)</span>
+<span id="cb6-40"><a href="#cb6-40" aria-hidden="true" tabindex="-1"></a>    .join(away_stats, on<span class="op">=</span><span class="st">"Team"</span>, how<span class="op">=</span><span class="st">"left"</span>)</span>
+<span id="cb6-41"><a href="#cb6-41" aria-hidden="true" tabindex="-1"></a>    .with_columns(</span>
+<span id="cb6-42"><a href="#cb6-42" aria-hidden="true" tabindex="-1"></a>        [</span>
+<span id="cb6-43"><a href="#cb6-43" aria-hidden="true" tabindex="-1"></a>            (pl.col(<span class="st">"home_wins"</span>) <span class="op">+</span> pl.col(<span class="st">"away_wins"</span>)).alias(<span class="st">"Total Wins"</span>),</span>
+<span id="cb6-44"><a href="#cb6-44" aria-hidden="true" tabindex="-1"></a>            (pl.col(<span class="st">"home_games"</span>) <span class="op">+</span> pl.col(<span class="st">"away_games"</span>)).alias(<span class="st">"Total Games"</span>),</span>
+<span id="cb6-45"><a href="#cb6-45" aria-hidden="true" tabindex="-1"></a>            (pl.col(<span class="st">"home_run_diff"</span>) <span class="op">+</span> pl.col(<span class="st">"away_run_diff"</span>)).alias(<span class="st">"Run Diff"</span>),</span>
+<span id="cb6-46"><a href="#cb6-46" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Calculate the historical average Elo</span></span>
+<span id="cb6-47"><a href="#cb6-47" aria-hidden="true" tabindex="-1"></a>            (</span>
+<span id="cb6-48"><a href="#cb6-48" aria-hidden="true" tabindex="-1"></a>                (pl.col(<span class="st">"home_elo_sum"</span>) <span class="op">+</span> pl.col(<span class="st">"away_elo_sum"</span>))</span>
+<span id="cb6-49"><a href="#cb6-49" aria-hidden="true" tabindex="-1"></a>                <span class="op">/</span> (pl.col(<span class="st">"home_games"</span>) <span class="op">+</span> pl.col(<span class="st">"away_games"</span>))</span>
+<span id="cb6-50"><a href="#cb6-50" aria-hidden="true" tabindex="-1"></a>            ).alias(<span class="st">"Avg Elo (25yr)"</span>),</span>
+<span id="cb6-51"><a href="#cb6-51" aria-hidden="true" tabindex="-1"></a>        ]</span>
+<span id="cb6-52"><a href="#cb6-52" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb6-53"><a href="#cb6-53" aria-hidden="true" tabindex="-1"></a>    .with_columns([(pl.col(<span class="st">"Total Wins"</span>) <span class="op">/</span> pl.col(<span class="st">"Total Games"</span>)).alias(<span class="st">"Win %"</span>)])</span>
+<span id="cb6-54"><a href="#cb6-54" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Select the columns we want to show the reader</span></span>
+<span id="cb6-55"><a href="#cb6-55" aria-hidden="true" tabindex="-1"></a>    .select([<span class="st">"Team"</span>, <span class="st">"Final Elo"</span>, <span class="st">"Avg Elo (25yr)"</span>, <span class="st">"Win %"</span>, <span class="st">"Run Diff"</span>])</span>
+<span id="cb6-56"><a href="#cb6-56" aria-hidden="true" tabindex="-1"></a>    .sort(<span class="st">"Final Elo"</span>, descending<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-57"><a href="#cb6-57" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-58"><a href="#cb6-58" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-59"><a href="#cb6-59" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Round the decimals for publishing and grab the Top 5</span></span>
+<span id="cb6-60"><a href="#cb6-60" aria-hidden="true" tabindex="-1"></a>published_table <span class="op">=</span> final_standings.with_columns(</span>
+<span id="cb6-61"><a href="#cb6-61" aria-hidden="true" tabindex="-1"></a>    [</span>
+<span id="cb6-62"><a href="#cb6-62" aria-hidden="true" tabindex="-1"></a>        pl.col(<span class="st">"Final Elo"</span>).<span class="bu">round</span>(<span class="dv">1</span>),</span>
+<span id="cb6-63"><a href="#cb6-63" aria-hidden="true" tabindex="-1"></a>        pl.col(<span class="st">"Avg Elo (25yr)"</span>).<span class="bu">round</span>(<span class="dv">1</span>),</span>
+<span id="cb6-64"><a href="#cb6-64" aria-hidden="true" tabindex="-1"></a>        pl.col(<span class="st">"Win %"</span>).<span class="bu">round</span>(<span class="dv">3</span>),</span>
+<span id="cb6-65"><a href="#cb6-65" aria-hidden="true" tabindex="-1"></a>    ]</span>
+<span id="cb6-66"><a href="#cb6-66" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-67"><a href="#cb6-67" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-68"><a href="#cb6-68" aria-hidden="true" tabindex="-1"></a><span class="co"># Print as a Markdown table so it can be easily copied into Medium</span></span>
+<span id="cb6-69"><a href="#cb6-69" aria-hidden="true" tabindex="-1"></a><span class="co"># print(published_table.to_pandas().to_markdown(index=False))</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The model is generally able to distinguish between good and bad teams. The Dodgers, Braves, Astros, and Yankees all finish with strong ratings, while the Angels, Rockies, and White Sox are near the bottom. This is a good sign that the model is learning something meaningful from the data.</p>
+<p>Additionally, the model seems to have a recency bias, which is expected, as the Elo system is designed to be more reactive to recent performance. The Yankees were the strongest team by win percentage, run differential and highest average Elo (makes sense due to their dominance in the late 90s and early 2000s), but finished in the 8th spot in the final Elo ratings. This is likely because their recent performance has been more mediocre, and the model is heavily weighting the last few seasons. The Padres, on the other hand, have a much higher final Elo than their historical average, which reflects their recent surge in performance, aligning with their declaration that the 2020s are their decade (although the postseason success has yet to come).</p>
+</section>
+<section id="visualizing-dynasties-and-power-shifts" class="level3">
+<h3 class="anchored" data-anchor-id="visualizing-dynasties-and-power-shifts">Visualizing Dynasties and Power Shifts</h3>
+<p>To truly see the power of Elo, we shouldn’t just look at a single snapshot in time. Because our model calculates a rating after every single game, we can chart how franchises rise and fall over the years.</p>
+<p>Using matplotlib and seaborn, let’s visualize the Los Angeles Dodgers’ and New York Yankees’ Elo rating over our entire 25-year sample. The Dodgers and Yankees are two of the most storied franchises in baseball history, with multiple championships and long periods of dominance. However, baseball has been dominated by the Dodgers since the start of the 2020s, while the Yankees have been unable to recreate their dominance of the later 90s and early 2000s since their last World Series win in 2009. By plotting their Elo trajectories side by side, we can see how the model captures their respective dynasties, slumps, and resurgences over time. We will also include a dashed line at 1500 to represent the league average, providing context for how far above or below average each team is at any given point in time.</p>
+<div id="e50bfd7e" class="cell" data-execution_count="8">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> seaborn <span class="im">as</span> sns</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter for Dodgers and Yankees</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>comparison_history <span class="op">=</span> final_model.<span class="bu">filter</span>(</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    (pl.col(<span class="st">"hometeam"</span>).is_in([<span class="st">"Dodgers"</span>, <span class="st">"Yankees"</span>]))</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">|</span> (pl.col(<span class="st">"visteam"</span>).is_in([<span class="st">"Dodgers"</span>, <span class="st">"Yankees"</span>]))</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>).to_pandas()</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract ratings for both teams</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> extract_elo(row, team):</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> row[<span class="st">"hometeam"</span>] <span class="op">==</span> team:</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> row[<span class="st">"home_elo_pre"</span>]</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">elif</span> row[<span class="st">"visteam"</span>] <span class="op">==</span> team:</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> row[<span class="st">"away_elo_pre"</span>]</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span>:</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">None</span></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>comparison_history[<span class="st">"dodgers_elo"</span>] <span class="op">=</span> comparison_history.<span class="bu">apply</span>(</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>    <span class="kw">lambda</span> row: extract_elo(row, <span class="st">"Dodgers"</span>), axis<span class="op">=</span><span class="dv">1</span></span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>comparison_history[<span class="st">"yankees_elo"</span>] <span class="op">=</span> comparison_history.<span class="bu">apply</span>(</span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>    <span class="kw">lambda</span> row: extract_elo(row, <span class="st">"Yankees"</span>), axis<span class="op">=</span><span class="dv">1</span></span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>sns.set_palette(<span class="st">"Set2"</span>)</span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a><span class="co"># Plotting</span></span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">8</span>, <span class="dv">4</span>))</span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>sns.lineplot(</span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>    data<span class="op">=</span>comparison_history,</span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"date"</span>,</span>
+<span id="cb7-34"><a href="#cb7-34" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"dodgers_elo"</span>,</span>
+<span id="cb7-35"><a href="#cb7-35" aria-hidden="true" tabindex="-1"></a>    linewidth<span class="op">=</span><span class="fl">1.5</span>,</span>
+<span id="cb7-36"><a href="#cb7-36" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="st">"Dodgers"</span>,</span>
+<span id="cb7-37"><a href="#cb7-37" aria-hidden="true" tabindex="-1"></a>    ax<span class="op">=</span>ax,</span>
+<span id="cb7-38"><a href="#cb7-38" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-39"><a href="#cb7-39" aria-hidden="true" tabindex="-1"></a>sns.lineplot(</span>
+<span id="cb7-40"><a href="#cb7-40" aria-hidden="true" tabindex="-1"></a>    data<span class="op">=</span>comparison_history,</span>
+<span id="cb7-41"><a href="#cb7-41" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"date"</span>,</span>
+<span id="cb7-42"><a href="#cb7-42" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"yankees_elo"</span>,</span>
+<span id="cb7-43"><a href="#cb7-43" aria-hidden="true" tabindex="-1"></a>    linewidth<span class="op">=</span><span class="fl">1.5</span>,</span>
+<span id="cb7-44"><a href="#cb7-44" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="st">"Yankees"</span>,</span>
+<span id="cb7-45"><a href="#cb7-45" aria-hidden="true" tabindex="-1"></a>    ax<span class="op">=</span>ax,</span>
+<span id="cb7-46"><a href="#cb7-46" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-47"><a href="#cb7-47" aria-hidden="true" tabindex="-1"></a>ax.axhline(</span>
+<span id="cb7-48"><a href="#cb7-48" aria-hidden="true" tabindex="-1"></a>    <span class="dv">1500</span>, color<span class="op">=</span><span class="st">"gray"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, linewidth<span class="op">=</span><span class="dv">2</span>, alpha<span class="op">=</span><span class="fl">0.7</span>, label<span class="op">=</span><span class="st">"League Average"</span></span>
+<span id="cb7-49"><a href="#cb7-49" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-50"><a href="#cb7-50" aria-hidden="true" tabindex="-1"></a>ax.set_title(</span>
+<span id="cb7-51"><a href="#cb7-51" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Dodgers vs. Yankees: A Tale of Two Dynasties (1998–2024)"</span>,</span>
+<span id="cb7-52"><a href="#cb7-52" aria-hidden="true" tabindex="-1"></a>    fontsize<span class="op">=</span><span class="dv">18</span>,</span>
+<span id="cb7-53"><a href="#cb7-53" aria-hidden="true" tabindex="-1"></a>    fontweight<span class="op">=</span><span class="st">"bold"</span>,</span>
+<span id="cb7-54"><a href="#cb7-54" aria-hidden="true" tabindex="-1"></a>    pad<span class="op">=</span><span class="dv">15</span>,</span>
+<span id="cb7-55"><a href="#cb7-55" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-56"><a href="#cb7-56" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">""</span>)</span>
+<span id="cb7-57"><a href="#cb7-57" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Elo Rating"</span>)</span>
+<span id="cb7-58"><a href="#cb7-58" aria-hidden="true" tabindex="-1"></a>ax.legend()</span>
+<span id="cb7-59"><a href="#cb7-59" aria-hidden="true" tabindex="-1"></a>sns.despine(left<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb7-60"><a href="#cb7-60" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="MLB_Elo_files/figure-html/cell-9-output-1.png" width="815" height="374" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="calibration-the-wilson-interval" class="level3">
+<h3 class="anchored" data-anchor-id="calibration-the-wilson-interval">Calibration: The Wilson Interval</h3>
+<p>Finally, we need to check the model’s calibration. If our model says a team has a 60% chance to win, does that team actually win 60% of the time in the real world?</p>
+<p>To visualize this, we bucket our thousands of predictions into 5% bins (e.g., 45-50%, 50-55%) and compare the average predicted probability in that bin to the actual win rate. To ensure statistical rigor, we will add Wilson Score Intervals (error bars) to show our confidence in the actual win rate based on the sample size of each bin.</p>
+<div id="5ac66ab7" class="cell" data-execution_count="9">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> wilson_interval(successes, total, alpha<span class="op">=</span><span class="fl">0.05</span>):</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> total <span class="op">==</span> <span class="dv">0</span>:</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="dv">0</span>, <span class="dv">1</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    z <span class="op">=</span> <span class="fl">1.96</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    phat <span class="op">=</span> successes <span class="op">/</span> total</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    denominator <span class="op">=</span> <span class="dv">1</span> <span class="op">+</span> z<span class="op">**</span><span class="dv">2</span> <span class="op">/</span> total</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    center <span class="op">=</span> (phat <span class="op">+</span> z<span class="op">**</span><span class="dv">2</span> <span class="op">/</span> (<span class="dv">2</span> <span class="op">*</span> total)) <span class="op">/</span> denominator</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    margin <span class="op">=</span> z <span class="op">*</span> np.sqrt((phat <span class="op">*</span> (<span class="dv">1</span> <span class="op">-</span> phat) <span class="op">+</span> z<span class="op">**</span><span class="dv">2</span> <span class="op">/</span> (<span class="dv">4</span> <span class="op">*</span> total)) <span class="op">/</span> total) <span class="op">/</span> denominator</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="bu">max</span>(<span class="dv">0</span>, center <span class="op">-</span> margin), <span class="bu">min</span>(<span class="dv">1</span>, center <span class="op">+</span> margin)</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>final_model <span class="op">=</span> final_model.with_columns(</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>    pl.when(pl.col(<span class="st">"hruns"</span>) <span class="op">&gt;</span> pl.col(<span class="st">"vruns"</span>))</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>    .then(<span class="dv">1</span>)</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>    .otherwise(<span class="dv">0</span>)</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>    .alias(<span class="st">"actual_home_win"</span>)</span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Build calibration bins from final_model (required before interval calculation)</span></span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>final_wilson <span class="op">=</span> (</span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>    final_model.with_columns(</span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>        pl.col(<span class="st">"home_win_prob"</span>).clip(<span class="fl">0.0</span>, <span class="fl">0.999999</span>).alias(<span class="st">"home_win_prob_clipped"</span>)</span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>    .with_columns(</span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>        ((pl.col(<span class="st">"home_win_prob_clipped"</span>) <span class="op">*</span> <span class="dv">10</span>).floor() <span class="op">/</span> <span class="dv">10</span>).alias(<span class="st">"bin_left"</span>)</span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>    .with_columns((pl.col(<span class="st">"bin_left"</span>) <span class="op">+</span> <span class="fl">0.1</span>).alias(<span class="st">"bin_right"</span>))</span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a>    .with_columns(</span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>        pl.concat_str(</span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>            [</span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a>                pl.col(<span class="st">"bin_left"</span>).<span class="bu">round</span>(<span class="dv">1</span>).cast(pl.Utf8),</span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a>                pl.lit(<span class="st">"-"</span>),</span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a>                pl.col(<span class="st">"bin_right"</span>).<span class="bu">round</span>(<span class="dv">1</span>).cast(pl.Utf8),</span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a>            ]</span>
+<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a>        ).alias(<span class="st">"probability_bin"</span>)</span>
+<span id="cb8-39"><a href="#cb8-39" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb8-40"><a href="#cb8-40" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-42"><a href="#cb8-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-43"><a href="#cb8-43" aria-hidden="true" tabindex="-1"></a>calibration_df <span class="op">=</span> (</span>
+<span id="cb8-44"><a href="#cb8-44" aria-hidden="true" tabindex="-1"></a>    final_wilson.group_by(<span class="st">"probability_bin"</span>)</span>
+<span id="cb8-45"><a href="#cb8-45" aria-hidden="true" tabindex="-1"></a>    .agg(</span>
+<span id="cb8-46"><a href="#cb8-46" aria-hidden="true" tabindex="-1"></a>        pl.col(<span class="st">"home_win_prob_clipped"</span>).mean().alias(<span class="st">"avg_predicted_probability"</span>),</span>
+<span id="cb8-47"><a href="#cb8-47" aria-hidden="true" tabindex="-1"></a>        pl.col(<span class="st">"actual_home_win"</span>).mean().alias(<span class="st">"actual_outcome_rate"</span>),</span>
+<span id="cb8-48"><a href="#cb8-48" aria-hidden="true" tabindex="-1"></a>        pl.<span class="bu">len</span>().alias(<span class="st">"count"</span>),</span>
+<span id="cb8-49"><a href="#cb8-49" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb8-50"><a href="#cb8-50" aria-hidden="true" tabindex="-1"></a>    .sort(<span class="st">"avg_predicted_probability"</span>)</span>
+<span id="cb8-51"><a href="#cb8-51" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-52"><a href="#cb8-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-53"><a href="#cb8-53" aria-hidden="true" tabindex="-1"></a><span class="co"># Add Wilson intervals</span></span>
+<span id="cb8-54"><a href="#cb8-54" aria-hidden="true" tabindex="-1"></a>calibration_df <span class="op">=</span> calibration_df.with_columns(</span>
+<span id="cb8-55"><a href="#cb8-55" aria-hidden="true" tabindex="-1"></a>    pl.struct([<span class="st">"actual_outcome_rate"</span>, <span class="st">"count"</span>])</span>
+<span id="cb8-56"><a href="#cb8-56" aria-hidden="true" tabindex="-1"></a>    .map_elements(</span>
+<span id="cb8-57"><a href="#cb8-57" aria-hidden="true" tabindex="-1"></a>        <span class="kw">lambda</span> row: wilson_interval(</span>
+<span id="cb8-58"><a href="#cb8-58" aria-hidden="true" tabindex="-1"></a>            row[<span class="st">"actual_outcome_rate"</span>] <span class="op">*</span> row[<span class="st">"count"</span>], row[<span class="st">"count"</span>]</span>
+<span id="cb8-59"><a href="#cb8-59" aria-hidden="true" tabindex="-1"></a>        )[<span class="dv">0</span>],</span>
+<span id="cb8-60"><a href="#cb8-60" aria-hidden="true" tabindex="-1"></a>        return_dtype<span class="op">=</span>pl.Float64,</span>
+<span id="cb8-61"><a href="#cb8-61" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb8-62"><a href="#cb8-62" aria-hidden="true" tabindex="-1"></a>    .alias(<span class="st">"lower_bound"</span>),</span>
+<span id="cb8-63"><a href="#cb8-63" aria-hidden="true" tabindex="-1"></a>    pl.struct([<span class="st">"actual_outcome_rate"</span>, <span class="st">"count"</span>])</span>
+<span id="cb8-64"><a href="#cb8-64" aria-hidden="true" tabindex="-1"></a>    .map_elements(</span>
+<span id="cb8-65"><a href="#cb8-65" aria-hidden="true" tabindex="-1"></a>        <span class="kw">lambda</span> row: wilson_interval(</span>
+<span id="cb8-66"><a href="#cb8-66" aria-hidden="true" tabindex="-1"></a>            row[<span class="st">"actual_outcome_rate"</span>] <span class="op">*</span> row[<span class="st">"count"</span>], row[<span class="st">"count"</span>]</span>
+<span id="cb8-67"><a href="#cb8-67" aria-hidden="true" tabindex="-1"></a>        )[<span class="dv">1</span>],</span>
+<span id="cb8-68"><a href="#cb8-68" aria-hidden="true" tabindex="-1"></a>        return_dtype<span class="op">=</span>pl.Float64,</span>
+<span id="cb8-69"><a href="#cb8-69" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb8-70"><a href="#cb8-70" aria-hidden="true" tabindex="-1"></a>    .alias(<span class="st">"upper_bound"</span>),</span>
+<span id="cb8-71"><a href="#cb8-71" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-72"><a href="#cb8-72" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-73"><a href="#cb8-73" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb8-74"><a href="#cb8-74" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> seaborn <span class="im">as</span> sns</span>
+<span id="cb8-75"><a href="#cb8-75" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-76"><a href="#cb8-76" aria-hidden="true" tabindex="-1"></a>sns.<span class="bu">set</span>(style<span class="op">=</span><span class="st">"whitegrid"</span>)</span>
+<span id="cb8-77"><a href="#cb8-77" aria-hidden="true" tabindex="-1"></a>sns.set_palette(<span class="st">"Set2"</span>)</span>
+<span id="cb8-78"><a href="#cb8-78" aria-hidden="true" tabindex="-1"></a>plt.figure(figsize<span class="op">=</span>(<span class="dv">8</span>, <span class="dv">8</span>))</span>
+<span id="cb8-79"><a href="#cb8-79" aria-hidden="true" tabindex="-1"></a>sns.lineplot(</span>
+<span id="cb8-80"><a href="#cb8-80" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span>calibration_df.select(<span class="st">"avg_predicted_probability"</span>).to_series(),</span>
+<span id="cb8-81"><a href="#cb8-81" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span>calibration_df.select(<span class="st">"actual_outcome_rate"</span>).to_series(),</span>
+<span id="cb8-82"><a href="#cb8-82" aria-hidden="true" tabindex="-1"></a>    marker<span class="op">=</span><span class="st">"o"</span>,</span>
+<span id="cb8-83"><a href="#cb8-83" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-84"><a href="#cb8-84" aria-hidden="true" tabindex="-1"></a>sns.lineplot(x<span class="op">=</span>[<span class="dv">0</span>, <span class="dv">1</span>], y<span class="op">=</span>[<span class="dv">0</span>, <span class="dv">1</span>], linestyle<span class="op">=</span><span class="st">"--"</span>, color<span class="op">=</span><span class="st">"gray"</span>)  <span class="co"># reference line</span></span>
+<span id="cb8-85"><a href="#cb8-85" aria-hidden="true" tabindex="-1"></a>plt.fill_between(</span>
+<span id="cb8-86"><a href="#cb8-86" aria-hidden="true" tabindex="-1"></a>    calibration_df.select(<span class="st">"avg_predicted_probability"</span>).to_series(),</span>
+<span id="cb8-87"><a href="#cb8-87" aria-hidden="true" tabindex="-1"></a>    calibration_df.select(<span class="st">"lower_bound"</span>).to_series(),</span>
+<span id="cb8-88"><a href="#cb8-88" aria-hidden="true" tabindex="-1"></a>    calibration_df.select(<span class="st">"upper_bound"</span>).to_series(),</span>
+<span id="cb8-89"><a href="#cb8-89" aria-hidden="true" tabindex="-1"></a>    color<span class="op">=</span><span class="st">"blue"</span>,</span>
+<span id="cb8-90"><a href="#cb8-90" aria-hidden="true" tabindex="-1"></a>    alpha<span class="op">=</span><span class="fl">0.2</span>,</span>
+<span id="cb8-91"><a href="#cb8-91" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-92"><a href="#cb8-92" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">"Average Predicted Probability"</span>)</span>
+<span id="cb8-93"><a href="#cb8-93" aria-hidden="true" tabindex="-1"></a>plt.ylabel(<span class="st">"Actual Outcome Rate"</span>)</span>
+<span id="cb8-94"><a href="#cb8-94" aria-hidden="true" tabindex="-1"></a>plt.title(<span class="st">"Reliability Diagram for Elo Predictions"</span>)</span>
+<span id="cb8-95"><a href="#cb8-95" aria-hidden="true" tabindex="-1"></a>plt.grid(<span class="va">True</span>)</span>
+<span id="cb8-96"><a href="#cb8-96" aria-hidden="true" tabindex="-1"></a>plt.legend([<span class="st">"Elo Predictions"</span>, <span class="st">"Perfect Calibration"</span>])</span>
+<span id="cb8-97"><a href="#cb8-97" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="MLB_Elo_files/figure-html/cell-10-output-1.png" width="667" height="677" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Our predictions are fairly well calibrated, as they generally follow the y=x line. There are some deviations, particularly at the extremes, but overall the model seems to be performing reasonably well in terms of calibration. The error bands also give us an idea of the uncertainty in our estimates, which is important to consider when interpreting the results. Let’s investigate what’s happening in thos extreme regions. My hunch is that there are fewer data points in those regions, leading to higher uncertainty and more pronounced deviations from perfect calibration.</p>
+<div id="97ff8a54" class="cell" data-execution_count="10">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    final_wilson.select(pl.col(<span class="st">"probability_bin"</span>).value_counts())</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    .unnest(<span class="st">"probability_bin"</span>)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    .sort(by<span class="op">=</span><span class="st">"count"</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>shape: (7, 2)
+┌─────────────────┬───────┐
+│ probability_bin ┆ count │
+│ ---             ┆ ---   │
+│ str             ┆ u32   │
+╞═════════════════╪═══════╡
+│ 0.8-0.9         ┆ 10    │
+│ 0.2-0.3         ┆ 187   │
+│ 0.7-0.8         ┆ 1337  │
+│ 0.3-0.4         ┆ 3596  │
+│ 0.6-0.7         ┆ 12852 │
+│ 0.4-0.5         ┆ 18325 │
+│ 0.5-0.6         ┆ 27749 │
+└─────────────────┴───────┘</code></pre>
+</div>
+</div>
+<p>As expected, we see that the extreme bins (very low and very high predicted probabilities) have significantly fewer data points compared to the middle bins. This is especially pronounced in the 0.1-0.2 bin which has only 2 data points. Similarly, the other 2 extreme bins (0.8-0.9 and 0.2-0.3) also have relatively low counts compared to the other bins. This is actually a natural result from such a system as the logistic transformation we apply when calculating expected win probabilities tends to compress values towards the center of the distribution. As a result, we have fewer instances where teams are predicted to have very high or very low probabilities of winning, leading to less data in those extreme bins which in turn leads to higher uncertainty and more pronounced deviations from perfect calibration in those regions.</p>
+</section>
+<section id="statistical-evaluation-brier-score-and-log-loss" class="level3">
+<h3 class="anchored" data-anchor-id="statistical-evaluation-brier-score-and-log-loss">Statistical Evaluation: Brier Score and Log Loss</h3>
+<section id="brier-score" class="level4">
+<h4 class="anchored" data-anchor-id="brier-score">Brier Score</h4>
+<p>When evaluating probabilistic models, standard “accuracy” (win/loss percentage) is a terrible metric. If I say a team has a 51% chance to win, and they win, standard accuracy gives me a 100% score. That rewards overconfidence. Instead, statisticians use the Brier Score. The Brier Score calculates the Mean Squared Error (MSE) of your predicted probabilities against the actual binary outcome (1 for a win, 0 for a loss). <span class="math display">\[Brier Score = \frac{1}{N} \sum_{t=1}^{N} (f_t - o_t)^2\]</span> Where <span class="math inline">\(f_t\)</span> is the forecasted probability and <span class="math inline">\(o_t\)</span> is the actual outcome.</p>
+<p>A perfect model has a Brier Score of 0.0. Randomly guessing 50/50 yields a Brier Score of 0.250.To see if our model is actually smart, we must compare it against a naive baseline: simply guessing that the home team will win every single game at the historical average rate (~54%).</p>
+<div id="0a3092bf" class="cell" data-execution_count="11">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> brier_score_loss</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Calculate actual binary outcomes (1 if Home Win, 0 if Away Win)</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>final_model <span class="op">=</span> final_model.with_columns(</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    pl.when(pl.col(<span class="st">"hruns"</span>) <span class="op">&gt;</span> pl.col(<span class="st">"vruns"</span>))</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    .then(<span class="dv">1</span>)</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    .otherwise(<span class="dv">0</span>)</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    .alias(<span class="st">"actual_home_win"</span>)</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Extract arrays for scoring</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>y_true <span class="op">=</span> final_model[<span class="st">"actual_home_win"</span>].to_numpy()</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>y_pred_elo <span class="op">=</span> final_model[<span class="st">"home_win_prob"</span>].to_numpy()</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Create naive baseline (predicting the historical home win rate for every game)</span></span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>historical_home_win_rate <span class="op">=</span> y_true.mean()</span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>y_pred_naive <span class="op">=</span> [historical_home_win_rate] <span class="op">*</span> <span class="bu">len</span>(y_true)</span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Calculate Brier Scores</span></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>elo_brier <span class="op">=</span> brier_score_loss(y_true, y_pred_elo)</span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>naive_brier <span class="op">=</span> brier_score_loss(y_true, y_pred_naive)</span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Naive Baseline Brier Score: </span><span class="sc">{</span>naive_brier<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Elo Model Brier Score:      </span><span class="sc">{</span>elo_brier<span class="sc">:.4f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Naive Baseline Brier Score: 0.2486
+Elo Model Brier Score:      0.2436</code></pre>
+</div>
+</div>
+<p>Our naive baseline, which simply predicts the historical home win rate for every game, achieves a Brier Score of approximately 0.2486, while our Elo model achieves a significantly better Brier Score of approximately 0.2436. This indicates that our Elo model is providing more accurate probabilistic predictions than the naive baseline, as it has a lower Brier Score. The improvement, while not huge, is meaningful in the context of sports predictions where outcomes can be highly variable and influenced by many factors. This suggests that our model is capturing some of the underlying dynamics of baseball games that the naive baseline misses, such as team strength, home field advantage, and margin of victory.</p>
+</section>
+<section id="log-loss" class="level4">
+<h4 class="anchored" data-anchor-id="log-loss">Log Loss</h4>
+<p>I’m also interested in looking at the Log Loss (Cross-Entropy) metric for our predictions as this metric is more sensitive to extreme mispredictions compared to Brier Score. Log Loss penalizes incorrect predictions more heavily when the predicted probability is far from the actual outcome, making it a useful metric for evaluating the quality of probabilistic predictions.</p>
+<p>The formula for Log Loss is: <span class="math display">\[LL = -\frac{1}{N} \sum_{i=1}^{N} [S_i \cdot log(E_i) + (1 - S_i) \cdot log(1 - E_i)]\]</span></p>
+<p>Where:</p>
+<ul>
+<li><span class="math inline">\(N\)</span> is the total number of predictions</li>
+<li><span class="math inline">\(E_i\)</span> is the predicted probability of the outcome</li>
+<li><span class="math inline">\(S_i\)</span> is the actual outcome (1 if the team actually won, 0 otherwise)</li>
+</ul>
+<div id="e9b8d716" class="cell" data-execution_count="12">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>final_wilson <span class="op">=</span> final_wilson.with_columns(</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    pl.when(pl.col(<span class="st">"actual_home_win"</span>) <span class="op">==</span> <span class="dv">1</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    .then(pl.col(<span class="st">"home_win_prob"</span>).log())</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    .otherwise((<span class="dv">1</span> <span class="op">-</span> pl.col(<span class="st">"home_win_prob"</span>)).log())</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    .alias(<span class="st">"log_loss_component"</span>)</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>log_loss <span class="op">=</span> <span class="op">-</span>final_wilson.select(pl.col(<span class="st">"log_loss_component"</span>).mean()).item()</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>log_loss_naive <span class="op">=</span> <span class="op">-</span>(</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>    y_true <span class="op">*</span> np.log(historical_home_win_rate)</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">+</span> (<span class="dv">1</span> <span class="op">-</span> y_true) <span class="op">*</span> np.log(<span class="dv">1</span> <span class="op">-</span> historical_home_win_rate)</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>).mean()</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Naive Baseline Log Loss: </span><span class="sc">{</span>log_loss_naive<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Log Loss of Elo model predictions: </span><span class="sc">{</span>log_loss<span class="sc">:.4f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Naive Baseline Log Loss: 0.6904
+Log Loss of Elo model predictions: 0.6802</code></pre>
+</div>
+</div>
+<p>Our Elo model achieves a Log Loss of approximately 0.6802, compared to the naive baseline’s Log Loss of approximately 0.6904. This indicates that our Elo model is providing better probabilistic predictions than the naive baseline, as it has a lower Log Loss. The improvement in Log Loss suggests that our model is not only more accurate in terms of Brier Score but also better at assigning probabilities that reflect the true likelihood of outcomes, especially in cases where the predicted probabilities are far from the actual outcomes. This further supports the conclusion that our Elo model is capturing meaningful patterns in the data that the naive baseline misses.</p>
+</section>
+</section>
+</section>
+<section id="conclusions-and-potential-improvements" class="level2">
+<h2 class="anchored" data-anchor-id="conclusions-and-potential-improvements">Conclusions and Potential Improvements</h2>
+<p>Our baseline model is robust, perfectly calibrated, and mathematically sound. However, it is entirely “blind.” It doesn’t know who is injured, who got traded, or who is pitching. It only knows wins, losses, and run differentials. Some ways to improve this model include:</p>
+<ol type="1">
+<li><p><strong>Hyperparameter Tuning:</strong> For this project, we hardcoded our constants based on intuition and historical norms: a <span class="math inline">\(K\)</span>-factor of 4, a Home Field Advantage of +24, and an offseason mean reversion of 33%. By treating this as a true machine learning problem, we could use Grid Search or Bayesian Optimization to test thousands of parameter combinations against our historical Brier Score to find the mathematically optimal settings.</p></li>
+<li><p><strong>Starting Pitcher Adjustments:</strong> This is the Holy Grail of baseball modeling. A team’s true talent fluctuates wildly depending on who is on the mound. An elite team throwing their 5th starter is often the underdog against a mediocre team throwing their Cy Young ace. Upgrading our model to maintain individual pitcher Elo ratings—and dynamically adjusting the team’s rating based on the day’s starter—would drastically improve predictive accuracy.</p></li>
+<li><p><strong>Travel and Rest Disadvantages:</strong> Not all away games are created equal. Taking a short bus ride from New York to Philadelphia is very different than flying from Miami to Seattle without a rest day. Penalizing teams for schedule density and time-zone travel would capture biological fatigue.</p></li>
+</ol>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

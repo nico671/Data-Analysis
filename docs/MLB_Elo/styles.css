@@ -1,0 +1,29 @@
+@media print {
+  
+  /* fix code blocks */
+  pre, code {
+    white-space: pre-wrap !important; 
+    word-break: break-word !important; 
+    overflow-x: hidden !important; 
+  }
+
+  /* fix plots / images */
+  img, svg, canvas, .cell-output-display {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  /* fix markdown tables */
+  table {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  th, td {
+    word-break: break-word !important;
+  }
+
+  /* h2 { break-before: page; } */
+  pre, code, img, .cell { page-break-inside: avoid; }
+  /* @page { margin: 2cm; } */
+}

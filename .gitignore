@@ -11,14 +11,15 @@ wheels/
 
 .env
 
-data/baserunning/*
-data/clash_royale/*
-data/swing_metrics/*
-data/thebook/*
-basestealing_exploration.ipynb
-swing_metrics.ipynb
-thebook.ipynb
-clash_royale/*
-swing_metrics_plan.md
-best_traders.ipynb
-data/best_traders/*
+# in progress projects
+the_book/
+swing_metrics/
+clash_roy/
+
+# MLB Elo project
+MLB_Elo/data/2024gameinfo.csv
+MLB_Elo/data/prepared_game_data.parquet
+MLB_Elo/MLB_elo.ipynb
+
+/.quarto/
+**/*.quarto_ipynb
