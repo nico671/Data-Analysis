@@ -4,7 +4,7 @@ This repository contains various data analysis projects, primarily focused on ba
 
 ## Currently Public Projects
 
-1. [MLB Elo System](MLB_elo.ipynb): An implementation of the Elo rating system for MLB teams.
+1. [MLB Elo System](https://nico671.github.io/Data-Analysis/MLB_Elo/MLB_Elo.html): An implementation of the Elo rating system for MLB teams.
 
 ## Currently Working On
 
