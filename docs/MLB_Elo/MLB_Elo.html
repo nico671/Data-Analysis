@@ -206,7 +206,7 @@ window.Quarto = {
 <p>The first thing we will do is restrict our data to regular season games between 1998 and 2024. Playoff baseball is a different beast entirely. Pitcher usage changes, rest days are scheduled differently, and managers make decisions they would never make in June. To keep our model trained strictly on the “true talent” baseline of a 162-game season, we filter out the postseason.</p>
 <p>Second, we must maintain exactly 30 franchises. Between 1998 and 2024, two franchises changed their names and locations. The Montreal Expos (MON) became the Washington Nationals (WAS), and the Florida Marlins (FLO) became the Miami Marlins (MIA). If we don’t map these legacy abbreviations to their modern equivalents, our model will treat them as brand new expansion teams starting at 1500 Elo, completely breaking the historical continuity.</p>
 <p>In addition to these changes we will also apply preprocessing steps to ensure that our data is clean and ready for the Elo simulation. This includes handling missing values, standardizing team names, and creating new columns for home/away status and margin of victory (details omitted for brevity).</p>
-<div id="8bf3bbd8" class="cell" data-execution_count="2">
+<div id="04b5566d" class="cell" data-execution_count="2">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter for regular season games only</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> df.<span class="bu">filter</span>(pl.col(<span class="st">"gametype"</span>) <span class="op">==</span> <span class="st">"regular"</span>).<span class="bu">filter</span>(pl.col(<span class="st">"season"</span>) <span class="op">&gt;=</span> <span class="dv">1998</span>)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -219,7 +219,7 @@ window.Quarto = {
 <span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> df.sort([<span class="st">"date"</span>, <span class="st">"number"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<div id="829f8eb5" class="cell" data-execution_count="3">
+<div id="f0d3c4f3" class="cell" data-execution_count="3">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> df.with_columns(</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    pl.col(<span class="st">"date"</span>).cast(pl.String).<span class="bu">str</span>.strptime(pl.Date, <span class="bu">format</span><span class="op">=</span><span class="st">"%Y%m</span><span class="sc">%d</span><span class="st">"</span>)</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>)</span>
@@ -249,7 +249,7 @@ window.Quarto = {
 <h3 class="anchored" data-anchor-id="mathematical-helper-functions">Mathematical Helper Functions</h3>
 <p>First, let’s translate the math from our theory section into Python functions.</p>
 <p>We need a function to calculate the expected win probability (the logistic curve), incorporating our Home Field Advantage (HFA) adjustment.</p>
-<div id="39934212" class="cell" data-execution_count="4">
+<div id="0052cb8f" class="cell" data-execution_count="4">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_expected_win_prob(</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    rating_a, rating_b, is_team_a_home_team<span class="op">=</span><span class="va">False</span>, hfa_adjustment<span class="op">=</span><span class="dv">24</span></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>):</span>
@@ -262,7 +262,7 @@ window.Quarto = {
 <span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> <span class="dv">10</span> <span class="op">**</span> ((rating_b <span class="op">-</span> rating_a) <span class="op">/</span> <span class="dv">400</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>Next, we need the update rule. This function takes the actual outcome, compares it to the expectation, and multiplies it by our <span class="math inline">\(K\)</span>-factor and our logarithmic Margin of Victory multiplier.</p>
-<div id="2147ee50" class="cell" data-execution_count="5">
+<div id="3a71b51d" class="cell" data-execution_count="5">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> math</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -286,7 +286,7 @@ window.Quarto = {
 <h3 class="anchored" data-anchor-id="the-chronological-loop">The Chronological Loop</h3>
 <p>With our helper functions ready, we can run the simulation. We initialize a dictionary to hold the “live” rating of all 30 teams, starting everyone at the league average of 1500.</p>
 <p>As we iterate row-by-row through the Polars DataFrame, we fetch the current ratings, calculate the expected win probability, log the results, and then update the dictionary for the next day. Between seasons, we apply our 33% mean reversion to account for offseason roster changes.</p>
-<div id="66f24cd9" class="cell" data-execution_count="6">
+<div id="aa565ffc" class="cell" data-execution_count="6">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Initialize all 30 teams at the league average</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>team_ratings <span class="op">=</span> {</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    team: <span class="dv">1500</span> <span class="cf">for</span> team <span class="kw">in</span> df.select(pl.col(<span class="st">"hometeam"</span>).unique()).to_series().to_list()</span>
@@ -690,7 +690,7 @@ window.Quarto = {
 </tr>
 </tbody>
 </table>
-<div id="18c4565b" class="cell" data-execution_count="7">
+<div id="9fb775db" class="cell" data-execution_count="7">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> polars <span class="im">as</span> pl</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -756,10 +756,7 @@ window.Quarto = {
 <span id="cb6-63"><a href="#cb6-63" aria-hidden="true" tabindex="-1"></a>        pl.col(<span class="st">"Avg Elo (25yr)"</span>).<span class="bu">round</span>(<span class="dv">1</span>),</span>
 <span id="cb6-64"><a href="#cb6-64" aria-hidden="true" tabindex="-1"></a>        pl.col(<span class="st">"Win %"</span>).<span class="bu">round</span>(<span class="dv">3</span>),</span>
 <span id="cb6-65"><a href="#cb6-65" aria-hidden="true" tabindex="-1"></a>    ]</span>
-<span id="cb6-66"><a href="#cb6-66" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb6-67"><a href="#cb6-67" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-68"><a href="#cb6-68" aria-hidden="true" tabindex="-1"></a><span class="co"># Print as a Markdown table so it can be easily copied into Medium</span></span>
-<span id="cb6-69"><a href="#cb6-69" aria-hidden="true" tabindex="-1"></a><span class="co"># print(published_table.to_pandas().to_markdown(index=False))</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb6-66"><a href="#cb6-66" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>The model is generally able to distinguish between good and bad teams. The Dodgers, Braves, Astros, and Yankees all finish with strong ratings, while the Angels, Rockies, and White Sox are near the bottom. This is a good sign that the model is learning something meaningful from the data.</p>
 <p>Additionally, the model seems to have a recency bias, which is expected, as the Elo system is designed to be more reactive to recent performance. The Yankees were the strongest team by win percentage, run differential and highest average Elo (makes sense due to their dominance in the late 90s and early 2000s), but finished in the 8th spot in the final Elo ratings. This is likely because their recent performance has been more mediocre, and the model is heavily weighting the last few seasons. The Padres, on the other hand, have a much higher final Elo than their historical average, which reflects their recent surge in performance, aligning with their declaration that the 2020s are their decade (although the postseason success has yet to come).</p>
@@ -768,7 +765,7 @@ window.Quarto = {
 <h3 class="anchored" data-anchor-id="visualizing-dynasties-and-power-shifts">Visualizing Dynasties and Power Shifts</h3>
 <p>To truly see the power of Elo, we shouldn’t just look at a single snapshot in time. Because our model calculates a rating after every single game, we can chart how franchises rise and fall over the years.</p>
 <p>Using matplotlib and seaborn, let’s visualize the Los Angeles Dodgers’ and New York Yankees’ Elo rating over our entire 25-year sample. The Dodgers and Yankees are two of the most storied franchises in baseball history, with multiple championships and long periods of dominance. However, baseball has been dominated by the Dodgers since the start of the 2020s, while the Yankees have been unable to recreate their dominance of the later 90s and early 2000s since their last World Series win in 2009. By plotting their Elo trajectories side by side, we can see how the model captures their respective dynasties, slumps, and resurgences over time. We will also include a dashed line at 1500 to represent the league average, providing context for how far above or below average each team is at any given point in time.</p>
-<div id="8a4422bb" class="cell" data-execution_count="8">
+<div id="27db75ea" class="cell" data-execution_count="8">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> seaborn <span class="im">as</span> sns</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -842,7 +839,7 @@ window.Quarto = {
 <h3 class="anchored" data-anchor-id="calibration-the-wilson-interval">Calibration: The Wilson Interval</h3>
 <p>Finally, we need to check the model’s calibration. If our model says a team has a 60% chance to win, does that team actually win 60% of the time in the real world?</p>
 <p>To visualize this, we bucket our thousands of predictions into 5% bins (e.g., 45-50%, 50-55%) and compare the average predicted probability in that bin to the actual win rate. To ensure statistical rigor, we will add Wilson Score Intervals (error bars) to show our confidence in the actual win rate based on the sample size of each bin.</p>
-<div id="7a454145" class="cell" data-execution_count="9">
+<div id="1a9d69b3" class="cell" data-execution_count="9">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -949,7 +946,7 @@ window.Quarto = {
 </div>
 </div>
 <p>Our predictions are fairly well calibrated, as they generally follow the y=x line. There are some deviations, particularly at the extremes, but overall the model seems to be performing reasonably well in terms of calibration. The error bands also give us an idea of the uncertainty in our estimates, which is important to consider when interpreting the results. Let’s investigate what’s happening in thos extreme regions. My hunch is that there are fewer data points in those regions, leading to higher uncertainty and more pronounced deviations from perfect calibration.</p>
-<div id="47e9b325" class="cell" data-execution_count="10">
+<div id="74362cf0" class="cell" data-execution_count="10">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    final_wilson.select(pl.col(<span class="st">"probability_bin"</span>).value_counts())</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    .unnest(<span class="st">"probability_bin"</span>)</span>
@@ -980,7 +977,7 @@ window.Quarto = {
 <h4 class="anchored" data-anchor-id="brier-score">Brier Score</h4>
 <p>When evaluating probabilistic models, standard “accuracy” (win/loss percentage) is a terrible metric. If I say a team has a 51% chance to win, and they win, standard accuracy gives me a 100% score. That rewards overconfidence. Instead, statisticians use the Brier Score. The Brier Score calculates the Mean Squared Error (MSE) of your predicted probabilities against the actual binary outcome (1 for a win, 0 for a loss). <span class="math display">\[Brier Score = \frac{1}{N} \sum_{t=1}^{N} (f_t - o_t)^2\]</span> Where <span class="math inline">\(f_t\)</span> is the forecasted probability and <span class="math inline">\(o_t\)</span> is the actual outcome.</p>
 <p>A perfect model has a Brier Score of 0.0. Randomly guessing 50/50 yields a Brier Score of 0.250.To see if our model is actually smart, we must compare it against a naive baseline: simply guessing that the home team will win every single game at the historical average rate (~54%).</p>
-<div id="ad5519fd" class="cell" data-execution_count="11">
+<div id="ed4267e6" class="cell" data-execution_count="11">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> brier_score_loss</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Calculate actual binary outcomes (1 if Home Win, 0 if Away Win)</span></span>
@@ -1022,7 +1019,7 @@ Elo Model Brier Score:      0.2436</code></pre>
 <li><span class="math inline">\(E_i\)</span> is the predicted probability of the outcome</li>
 <li><span class="math inline">\(S_i\)</span> is the actual outcome (1 if the team actually won, 0 otherwise)</li>
 </ul>
-<div id="492e6498" class="cell" data-execution_count="12">
+<div id="247b8de0" class="cell" data-execution_count="12">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>final_wilson <span class="op">=</span> final_wilson.with_columns(</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    pl.when(pl.col(<span class="st">"actual_home_win"</span>) <span class="op">==</span> <span class="dv">1</span>)</span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    .then(pl.col(<span class="st">"home_win_prob"</span>).log())</span>

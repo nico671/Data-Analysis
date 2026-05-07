@@ -353,9 +353,6 @@ published_table = final_standings.with_columns(
         pl.col("Win %").round(3),
     ]
 )
-
-# Print as a Markdown table so it can be easily copied into Medium
-# print(published_table.to_pandas().to_markdown(index=False))
 ```
 
 The model is generally able to distinguish between good and bad teams. The Dodgers, Braves, Astros, and Yankees all finish with strong ratings, while the Angels, Rockies, and White Sox are near the bottom. This is a good sign that the model is learning something meaningful from the data. 
